@@ -4,7 +4,6 @@ import cn.hutool.cache.CacheUtil;
 import cn.hutool.cache.impl.TimedCache;
 import cn.hutool.core.comparator.CompareUtil;
 import cn.hutool.core.text.CharSequenceUtil;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.novicezk.midjourney.Constants;
 import com.github.novicezk.midjourney.ProxyProperties;
@@ -44,21 +43,17 @@ public class NotifyServiceImpl implements NotifyService {
 		String taskId = task.getId();
 		String statusStr = task.getStatus() + ":" + task.getProgress();
 		log.trace("Wait notify task change, task: {}({}), hook: {}", taskId, statusStr, notifyHook);
-		try {
-			String paramsStr = OBJECT_MAPPER.writeValueAsString(task);
-			this.executor.execute(() -> {
-				try {
-					executeNotify(taskId, statusStr, notifyHook, paramsStr);
-				} catch (Exception e) {
-					log.warn("Notify task change error, task: {}({}), hook: {}, msg: {}", taskId, statusStr, notifyHook, e.getMessage());
-				}
-			});
-		} catch (JsonProcessingException e) {
-			log.error(e.getMessage(), e);
-		}
-	}
+        //String paramsStr = OBJECT_MAPPER.writeValueAsString(task);
+        this.executor.execute(() -> {
+            try {
+                executeNotify(taskId, statusStr, notifyHook, task);
+            } catch (Exception e) {
+                log.warn("Notify task change error, task: {}({}), hook: {}, msg: {}", taskId, statusStr, notifyHook, e.getMessage());
+            }
+        });
+    }
 
-	private void executeNotify(String taskId, String currentStatusStr, String notifyHook, String paramsStr) {
+	private void executeNotify(String taskId, String currentStatusStr, String notifyHook, Task task) {
 		synchronized (this.taskStatusMap) {
 			String existStatusStr = this.taskStatusMap.get(taskId, () -> currentStatusStr);
 			int compare = compareStatusStr(currentStatusStr, existStatusStr);
@@ -69,16 +64,16 @@ public class NotifyServiceImpl implements NotifyService {
 			this.taskStatusMap.put(taskId, currentStatusStr);
 		}
 		log.debug("推送任务变更, 任务: {}({}), hook: {}", taskId, currentStatusStr, notifyHook);
-		ResponseEntity<String> responseEntity = postJson(notifyHook, paramsStr);
+		ResponseEntity<String> responseEntity = postJson(notifyHook, task);
 		if (!responseEntity.getStatusCode().is2xxSuccessful()) {
 			log.warn("Notify task change fail, task: {}({}), hook: {}, code: {}, msg: {}", taskId, currentStatusStr, notifyHook, responseEntity.getStatusCodeValue(), responseEntity.getBody());
 		}
 	}
 
-	private ResponseEntity<String> postJson(String notifyHook, String paramsJson) {
+	private ResponseEntity<String> postJson(String notifyHook, Task task) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
-		HttpEntity<String> httpEntity = new HttpEntity<>(paramsJson, headers);
+		HttpEntity<Task> httpEntity = new HttpEntity<>(task, headers);
 		return new RestTemplate().postForEntity(notifyHook, httpEntity, String.class);
 	}
 

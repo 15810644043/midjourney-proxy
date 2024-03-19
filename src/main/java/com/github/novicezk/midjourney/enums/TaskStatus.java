@@ -15,11 +15,11 @@ public enum TaskStatus {
 	/**
 	 * 执行中.
 	 */
-	IN_PROGRESS(2),
+	IN_PROGRESS(3),
 	/**
 	 * 失败.
 	 */
-	FAILURE(3),
+	FAILURE(4),
 	/**
 	 * 成功.
 	 */
